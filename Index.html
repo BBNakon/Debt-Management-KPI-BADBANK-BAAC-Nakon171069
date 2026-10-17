@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KPI Dashboard - เขตนครศรีธรรมราช</title>
+  <style>
+    :root {
+      --bg: #f1faf4;
+      --card: #ffffff;
+      --ink: #173b2b;
+      --muted: #526d5e;
+      --line: #d5e8da;
+      --primary: #16834b;
+      --primary-hover: #106b3c;
+      --primary-light: #e1f4e7;
+      --good: #087b46;
+      --warn: #855600;
+      --bad: #a52e3c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #e1f7e8 0, var(--bg) 260px);
+      color: var(--ink);
+      font: 14px/1.5 'Segoe UI', Tahoma, sans-serif;
+    }
+    main { max-width: 1350px; margin: auto; padding: 20px; }
+    header, .toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    header { justify-content: space-between; margin-bottom: 20px; }
+    h1 { font-size: 24px; margin: 0; color: #155b38; }
+    h2 { font-size: 17px; margin: 0 0 12px; color: #155b38; }
+    .muted { color: var(--muted); font-size: 13px; }
+    
+    .panel, .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      margin: 16px 0;
+      box-shadow: 0 5px 18px rgba(22, 105, 58, .07);
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .stats strong { display: block; font-size: 24px; color: #137947; margin-top: 4px; }
+    
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background .2s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary { background: var(--primary-light); color: #155b38; }
+    button.secondary:hover { background: #caebd5; }
+    button.danger { background: #fde8e8; color: var(--bad); }
+    
+    input, select {
+      border: 1px solid #c8dfd0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: #fff;
+    }
+    
+    .message {
+      background: #e3f5e9;
+      color: #205b3c;
+      padding: 12px 15px;
+      border-radius: 10px;
+      margin: 14px 0;
+      white-space: pre-wrap;
+    }
+    .message.good { background: #d7f3e2; color: #09663b; }
+    .message.warn { background: #fff2d8; color: var(--warn); }
+    .message.bad { background: #ffe7e9; color: var(--bad); }
+    .hidden { display: none !important; }
+
+    /* กราฟและแผนภูมิวิเคราะห์แบบมืออาชีพ */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    .chart-container { position: relative; height: 260px; width: 100%; }
+
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+    th { background: #e5f5ea; color: #20543a; font-weight: 600; }
+    tbody tr:hover { background: #f2faf4; }
+
+    .modal {
+      position: fixed; inset: 0; background: rgba(10, 30, 20, 0.6);
+      display: grid; place-items: center; padding: 15px; z-index: 100;
+    }
+    .modal-card {
+      width: min(550px, 100%); background: white; border-radius: 14px; padding: 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .field { display: block; margin: 12px 0; }
+    .field input { display: block; width: 100%; margin-top: 5px; }
+
+    @media(max-width: 950px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>เขตนครศรีธรรมราช — KPI Executive Dashboard</h1>
+      <div class="muted">ระบบติดตามและประเมินผลการบริหารจัดการหนี้ประจำปีบัญชี 2569</div>
+    </div>
+    <div class="toolbar">
+      <span id="accountBadge" class="muted">สถานะ: ผู้ใช้ทั่วไป</span>
+      <button id="loginBtn" class="secondary">เข้าสู่ระบบผู้ดูแล</button>
+      <button id="logoutBtn" class="secondary hidden">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <div id="notice" class="message">กำลังโหลดข้อมูลระบบ...</div>
+
+  <!-- สถิติภาพรวม -->
+  <section id="stats" class="stats"></section>
+
+  <!-- ส่วนแสดงแผนภูมิและกราฟ (Professional Visualizations) -->
+  <section class="dashboard-grid">
+    <div class="panel">
+      <h2>📊 สรุปความคืบหน้าตัวชี้วัด (KPI Progress Overview)</h2>
+      <div class="chart-container">
+        <canvas id="kpiBarChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>🍩 สัดส่วนสถานะการบรรลุเป้าหมาย</h2>
+      <div class="chart-container">
+        <canvas id="kpiPieChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ส่วนปุ่มผู้บริหารหลัง Login สำเร็จ -->
+  <section id="adminPanel" class="panel hidden">
+    <h2>🛠️ เมนูผู้บริหาร & จัดการระบบ</h2>
+    <p class="muted">สามารถนำเข้าไฟล์ข้อมูลหลัก และส่งออกรายงานสรุปสำหรับผู้บริหารได้ทันที</p>
+    <div class="toolbar" style="margin-top: 15px;">
+      <label for="reportScopeSelect" class="muted">ระดับรายงาน KPI</label>
+      <select id="reportScopeSelect"><option value="R">ระดับเขต</option></select>
+      <button id="exportPdfBtn" style="background: #0d6efd;">📥 PDF KPI 8 ข้อ (One Page)</button>
+      <button id="exportBranchPdfBtn" class="secondary">📄 PDF รายงานรายสาขาและผู้รับผิดชอบ</button>
+      <button id="import6035Btn" class="secondary">📂 นำเข้าไฟล์ 6035 (Bad Bank)</button>
+        <button id="initializeDatabaseBtn" class="secondary">🔄 ตั้งฐานและนำเข้า 6035 จาก Drive</button>
+      <button id="importMonthlyBtn" class="secondary">📑 นำเข้ารายงานผล KPI ประจำเดือน (PDF)</button>
+      <button id="recordKpiBtn" class="secondary">✍️ บันทึกผล KPI</button>
+      <button id="importStaffBtn" class="secondary">👥 นำเข้าฐานรายชื่อพนักงาน</button>
+    </div>
+  </section>
+
+  <!-- ตารางข้อมูล KPI หลัก -->
+  <section class="panel">
+    <div class="toolbar">
+      <h2>📋 ตารางรายละเอียดตัวชี้วัด (KPIs)</h2>
+      <select id="scopeSelect">
+        <option value="R">ระดับเขต</option>
+        <option value="H1">ศูนย์ท่าศาลา</option>
+        <option value="H2">ศูนย์ทุ่งสง</option>
+        <option value="H3">ศูนย์นครศรีธรรมราช</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ข้อ</th><th>ตัวชี้วัด</th><th>เป้าหมาย (Target)</th>
+            <th>ผลงานล่าสุด</th><th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody id="kpiTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- Modal สำหรับ Login / นำเข้าไฟล์ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="toolbar" style="justify-content: space-between; margin-bottom: 15px;">
+      <h2 id="modalTitle" style="margin:0;"></h2>
+      <button id="closeModal" class="secondary" style="padding: 4px 10px;">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Chart.js สำหรับวาดกราฟมืออาชีพ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+let state = { token: '', data: null, barChart: null, pieChart: null };
+
+async function call(action, extra = {}) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(res => res?.ok ? resolve(res.data) : reject(new Error(res?.error || 'Failed')))
+      .withFailureHandler(err => reject(new Error(err?.message || 'ไม่สามารถเชื่อมต่อระบบได้')))
+      .api({ action, token: state.token, ...extra });
+  });
+}
+
+function field(form, labelText, name, type = 'text') {
+  const label = document.createElement('label');
+  label.className = 'field';
+  label.appendChild(document.createTextNode(labelText));
+  const input = document.createElement('input');
+  input.name = name;
+  input.type = type;
+  input.autocomplete = name === 'password' ? 'current-password' : name === 'username' ? 'username' : 'off';
+  input.required = true;
+  label.appendChild(input);
+  form.appendChild(label);
+  return input;
+}
+
+function notify(text, type = '') {
+  const n = $('notice');
+  n.textContent = text;
+  n.className = 'message ' + type;
+}
+
+function formatNum(v, d = 2) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString('th-TH', { maximumFractionDigits: d });
+}
+
+/* ---------- 📈 วาดกราฟมืออาชีพด้วย Chart.js ---------- */
+function renderCharts(kpiList) {
+  if (typeof Chart !== 'function') {
+    notify('โหลดไลบรารีกราฟไม่สำเร็จ กรุณาตรวจการเชื่อมต่ออินเทอร์เน็ต', 'warn');
+    return;
+  }
+  const labels = kpiList.map(k => 'KPI ' + k.id);
+  const weights = kpiList.map(k => k.weight || 10);
+
+  // 1. Bar Chart: น้ำหนักและความสำคัญของ KPI
+  if (state.barChart) state.barChart.destroy();
+  state.barChart = new Chart($('kpiBarChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'น้ำหนักตัวชี้วัด (%)',
+        data: weights,
+        backgroundColor: '#16834b',
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 35 } }
+    }
+  });
+
+  // 2. Pie Chart: สถานะ KPI
+  const passed = kpiList.filter(k => k.status === 'ผ่าน').length;
+  const failed = kpiList.filter(k => k.status === 'ไม่ผ่าน').length;
+  const inProgress = kpiList.filter(k => k.status === 'อยู่ระหว่างดำเนินการ').length;
+  const none = kpiList.filter(k => k.status === 'ยังไม่มีผลจริงยืนยัน').length;
+
+  if (state.pieChart) state.pieChart.destroy();
+  state.pieChart = new Chart($('kpiPieChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['ผ่านเกณฑ์', 'ไม่ผ่านเกณฑ์', 'กำลังดำเนินการ', 'ยังไม่มีผลงาน'],
+      datasets: [{
+        data: [passed, failed, inProgress, none],
+        backgroundColor: ['#087b46', '#a52e3c', '#f0ad4e', '#d5e8da']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+}
+
+function renderDashboard() {
+  const kpi = state.data.kpi;
+  
+  // Stats Cards
+  const stats = $('stats');
+  stats.replaceChildren();
+  
+  const totalBal = state.data.snapshots.reduce((s, r) => s + Number(r.balance || 0), 0);
+  const passedCnt = kpi.filter(x => x.status === 'ผ่าน').length;
+
+  const cards = [
+    ['ตัวชี้วัดทั้งหมด', kpi.length + ' ข้อ'],
+    ['ผ่านเกณฑ์ประเมิน', passedCnt + ' ข้อ'],
+    ['สาขาทั้งหมด', state.data.snapshots.length + ' สาขา'],
+    ['หนี้คงเหลือรวม', formatNum(totalBal, 3) + ' ลบ.']
+  ];
+
+  cards.forEach(([title, val]) => {
+    const div = document.createElement('div');
+    div.className = 'stat';
+    const label = document.createElement('span');
+    label.className = 'muted';
+    label.textContent = title;
+    const value = document.createElement('strong');
+    value.textContent = val;
+    div.append(label, value);
+    stats.appendChild(div);
+  });
+
+  // Table
+  const tbody = $('kpiTableBody');
+  tbody.replaceChildren();
+  kpi.forEach(item => {
+    const tr = document.createElement('tr');
+    const cells = [item.id, item.name,
+      item.target !== null ? formatNum(item.target) + ' ' + item.unit : 'ตามเงื่อนไขเขต',
+      item.last ? formatNum(item.last.value) + ' ' + item.unit : '—'];
+    cells.forEach((value, index) => {
+      const td = document.createElement('td');
+      if (index === 0) {
+        const strong = document.createElement('b');
+        strong.textContent = value;
+        td.appendChild(strong);
+      } else {
+        td.textContent = value;
+      }
+      tr.appendChild(td);
+    });
+    const statusCell = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.textContent = item.status;
+    badge.style.cssText = 'padding:3px 8px; border-radius:4px;';
+    badge.style.background = item.status === 'ผ่าน' ? '#d7f3e2' : item.status === 'ไม่ผ่าน' ? '#ffe7e9' : '#fff2d8';
+    badge.style.color = item.status === 'ผ่าน' ? '#09663b' : item.status === 'ไม่ผ่าน' ? '#a52e3c' : '#855600';
+    statusCell.appendChild(badge);
+    tr.appendChild(statusCell);
+    tbody.appendChild(tr);
+  });
+
+  renderCharts(kpi);
+}
+
+/* ---------- 🚀 การจัดการเหตุการณ์และเมนูผู้บริหาร ---------- */
+
+async function loadData() {
+  try {
+    state.data = await call('public');
+    $('scopeSelect').value = 'R';
+    const reportScope = $('reportScopeSelect');
+    reportScope.replaceChildren(new Option('ระดับเขต', 'R'));
+    state.data.hubs.forEach(hub => reportScope.add(new Option(hub.name, hub.id)));
+    renderDashboard();
+    notify('โหลดข้อมูลแดชบอร์ดสำเร็จ', 'good');
+  } catch (err) {
+    notify('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + err.message, 'bad');
+  }
+}
+
+// 1. ส่งออก One Page PDF
+async function handleExportPDF() {
+  notify('กำลังสร้างรายงาน One Page PDF...', 'warn');
+  try {
+    await downloadReport('exportPDF', { scope: $('reportScopeSelect').value }, 'ส่งออกรายงาน KPI สำเร็จ');
+    notify('ดาวน์โหลดรายงาน One Page สำเร็จ', 'good');
+  } catch (e) {
+    notify('สร้าง PDF ไม่สำเร็จ: ' + e.message, 'bad');
+  }
+}
+
+async function handleExportBranchPDF() {
+  notify('กำลังสร้างรายงานรายสาขา...', 'warn');
+  try {
+    await downloadReport('exportBranchPDF', {}, 'ดาวน์โหลดรายงานรายสาขาสำเร็จ');
+    notify('ดาวน์โหลดรายงานรายสาขาสำเร็จ', 'good');
+  } catch (err) {
+    notify('สร้างรายงานรายสาขาไม่สำเร็จ: ' + err.message, 'bad');
+  }
+}
+
+async function downloadReport(action, params, successMessage) {
+  const res = await call(action, params);
+  const bytes = Uint8Array.from(atob(res.base64), character => character.charCodeAt(0));
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([bytes], { type: res.mimeType }));
+  link.download = res.fileName;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  return successMessage;
+}
+
+// 2. นำเข้าไฟล์ 6035
+async function handleImport6035() {
+  openModal('นำเข้าไฟล์ 6035 (Bad Bank)');
+  const body = $('modalBody');
+  body.replaceChildren();
+
+  try {
+    const files = (await call('sourceFiles')).filter(f => /6035/i.test(f.name) && (f.mime === 'application/vnd.google-apps.spreadsheet' || f.mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+    if (!files.length) {
+      body.textContent = 'ไม่พบไฟล์ Google Sheets หรือ .xlsx ในโฟลเดอร์ข้อมูลที่กำหนด';
+      return;
+    }
+    const sel = document.createElement('select');
+    sel.className = 'field';
+    files.forEach(f => sel.add(new Option(f.name + ' (' + f.modified.slice(0,10) + ')', f.id)));
+    body.appendChild(sel);
+    const help = document.createElement('p');
+    help.className = 'muted';
+    help.textContent = 'ระบบจะตรวจหัวตารางและนำเข้าข้อมูลแยกตามสาขา โดย snapshot เดิมจะคงอยู่หากนำเข้าไม่สำเร็จ';
+    body.appendChild(help);
+    
+    const btn = document.createElement('button');
+    btn.textContent = 'เริ่มนำเข้าไฟล์';
+    btn.style.marginTop = '8px';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const started = await call('import6035', { fileId: sel.value });
+        body.replaceChildren();
+        const progress = document.createElement('p');
+        progress.textContent = started.message;
+        body.appendChild(progress);
+        await monitorImport(body, progress);
+      } catch (err) {
+        btn.disabled = false;
+        notify('เริ่มนำเข้าไม่สำเร็จ: ' + err.message, 'bad');
+      }
+    };
+    body.appendChild(btn);
+  } catch (err) {
+    body.textContent = 'ไม่สามารถดึงรายชื่อไฟล์ได้: ' + err.message;
+  }
+}
+
+async function monitorImport(container, progress) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 10 * 60 * 1000) {
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    const status = await call('importStatus');
+    if (status.status === 'done') {
+      progress.textContent = `นำเข้า ${status.sourceName} สำเร็จ (${formatNum(status.branchCount, 0)} สาขา)`;
+      notify('นำเข้าข้อมูล 6035 สำเร็จ', 'good');
+      await loadData();
+      return;
+    }
+    if (status.status === 'error') throw new Error(status.error || 'นำเข้าไม่สำเร็จ');
+    progress.textContent = `${status.message} (${formatNum(status.processed, 0)} / ${formatNum(status.lastRow, 0)} แถว)`;
+  }
+  progress.textContent = 'งานนำเข้ายังทำงานอยู่ สามารถปิดหน้าต่างนี้ได้ ระบบจะทำต่อเบื้องหลัง';
+}
+
+// 3. นำเข้า PDF ประจำเดือน
+function handleImportMonthly() {
+  openModal('นำเข้ารายงานผล KPI ประจำเดือน (PDF)');
+  const body = $('modalBody');
+  body.replaceChildren();
+
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.textContent = 'ลงทะเบียน PDF เป็นเอกสารอ้างอิงเท่านั้น ระบบยังไม่ถอดค่าตัวเลขจากเอกสารโดยอัตโนมัติ';
+  body.appendChild(help);
+
+  const input = document.createElement('input');
+  input.placeholder = 'วาง Google Drive File ID ของ PDF';
+  input.setAttribute('aria-label', 'Google Drive File ID ของ PDF');
+  input.required = true;
+  input.className = 'field';
+  body.appendChild(input);
+
+  const btn = document.createElement('button');
+  btn.textContent = 'ลงทะเบียน PDF';
+  btn.style.marginTop = '15px';
+  btn.onclick = async () => {
+    if (!input.value.trim()) {
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const res = await call('registerMonthlyPdf', { fileId: input.value });
+      const refreshed = await call('public');
+      state.data.sources = refreshed.sources;
+      closeModal();
+      notify(res.message, 'good');
+    } catch (e) {
+      btn.disabled = false;
+      notify('ลงทะเบียน PDF ไม่สำเร็จ: ' + e.message, 'bad');
+    }
+  };
+  body.appendChild(btn);
+}
+
+function openModal(title) {
+  $('modalTitle').textContent = title;
+  $('modal').classList.remove('hidden');
+}
+function closeModal() { $('modal').classList.add('hidden'); }
+
+/* ---------- 🔑 ระบบล็อกอิน ---------- */
+$('loginBtn').onclick = () => {
+  openModal('เข้าสู่ระบบผู้ดูแลระบบ');
+  const body = $('modalBody');
+  body.replaceChildren();
+
+  const form = document.createElement('form');
+  const u = field(form, 'ชื่อผู้ใช้ (Username)', 'username');
+  u.value = 'Admin';
+  const p = field(form, 'รหัสผ่าน (Password)', 'password', 'password');
+
+  const sub = document.createElement('button');
+  sub.textContent = 'เข้าสู่ระบบ';
+  sub.style.marginTop = '10px';
+  form.appendChild(sub);
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const res = await call('login', { username: u.value, password: p.value });
+      state.token = res.token;
+      closeModal();
+      $('adminPanel').classList.remove('hidden');
+      $('loginBtn').classList.add('hidden');
+      $('logoutBtn').classList.remove('hidden');
+      $('accountBadge').textContent = 'สถานะ: ผู้ดูแลระบบ (Admin)';
+      notify('เข้าสู่ระบบสำเร็จ', 'good');
+    } catch (err) {
+      alert('ล็อกอินไม่ผ่าน: ' + err.message);
+    }
+  };
+  body.appendChild(form);
+};
+
+$('logoutBtn').onclick = async () => {
+  try {
+    await call('logout');
+  } catch (err) {
+    notify('ปิดเซสชันบนระบบไม่สำเร็จ: ' + err.message, 'warn');
+  } finally {
+    state.token = '';
+    $('adminPanel').classList.add('hidden');
+    $('loginBtn').classList.remove('hidden');
+    $('logoutBtn').classList.add('hidden');
+    $('accountBadge').textContent = 'สถานะ: ผู้ใช้ทั่วไป';
+    $('scopeSelect').value = 'R';
+    if (state.data) {
+      const publicData = await call('public').catch(() => null);
+      if (publicData) state.data.kpi = publicData.kpi;
+      renderDashboard();
+    }
+    notify('ออกจากระบบแล้ว', 'good');
+  }
+};
+
+$('closeModal').onclick = closeModal;
+$('exportPdfBtn').onclick = handleExportPDF;
+$('exportBranchPdfBtn').onclick = handleExportBranchPDF;
+$('import6035Btn').onclick = handleImport6035;
+$('initializeDatabaseBtn').onclick = handleInitializeDatabase;
+$('importMonthlyBtn').onclick = handleImportMonthly;
+$('recordKpiBtn').onclick = handleRecordKpi;
+$('importStaffBtn').onclick = handleImportStaff;
+
+async function handleImportStaff() {
+  const button = $('importStaffBtn');
+  button.disabled = true;
+  try {
+    const result = await call('importStaffRoster');
+    notify(`อัปเดตพนักงาน ${formatNum(result.total, 0)} ราย และมีทะเบียนสาขารวม ${formatNum(result.branchCount, 0)} สาขา`, 'good');
+  } catch (err) {
+    notify('นำเข้าฐานพนักงานไม่สำเร็จ: ' + err.message, 'bad');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleInitializeDatabase() {
+  const button = $('initializeDatabaseBtn');
+  button.disabled = true;
+  notify('กำลังเตรียมฐานข้อมูลและนำเข้าไฟล์จาก Drive...', 'warn');
+  try {
+    const job = await call('initializeDatabase');
+    openModal('กำลังตั้งฐานข้อมูล');
+    const body = $('modalBody');
+    body.replaceChildren();
+    const progress = document.createElement('p');
+    progress.textContent = job.message;
+    body.appendChild(progress);
+    await monitorImport(body, progress);
+  } catch (err) {
+    notify('ตั้งฐาน/นำเข้าไม่สำเร็จ: ' + err.message, 'bad');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function handleRecordKpi() {
+  openModal('บันทึกผล KPI จากรายงาน');
+  const body = $('modalBody');
+  body.replaceChildren();
+  const form = document.createElement('form');
+  const makeSelect = (labelText, name, options) => {
+    const label = document.createElement('label');
+    label.className = 'field';
+    label.appendChild(document.createTextNode(labelText));
+    const select = document.createElement('select');
+    select.name = name;
+    select.required = true;
+    options.forEach(option => select.add(new Option(option.label, option.value)));
+    label.appendChild(select);
+    form.appendChild(label);
+    return select;
+  };
+  const kpiOptions = state.data.kpi.map(item => ({ label: `${item.id}. ${item.name} (${item.unit})`, value: item.id }));
+  const kpi = makeSelect('ตัวชี้วัด', 'kpiId', kpiOptions);
+  const scope = makeSelect('ระดับข้อมูล', 'scope', [
+    { label: 'ระดับเขต', value: 'R' },
+    ...state.data.hubs.map(hub => ({ label: hub.name, value: hub.id }))
+  ]);
+  const period = makeSelect('งวดข้อมูล', 'period', [
+    ...['2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12','2027-01','2027-02','2027-03']
+      .map(value => ({ label: value, value }))
+  ]);
+  const value = field(form, 'ผลงานจริง', 'value', 'number');
+  value.step = 'any';
+  const asOf = field(form, 'วันที่ข้อมูล (เช่น 30/09/2569)', 'asOf');
+  const sources = (state.data.sources || []).filter(item => item.kind === 'MONTHLY_PDF');
+  const source = makeSelect('เอกสารอ้างอิง (ถ้ามี)', 'sourceId', [
+    { label: 'ไม่ระบุ', value: '' },
+    ...sources.map(item => ({ label: item.name, value: item.id }))
+  ]);
+  const note = field(form, 'หมายเหตุ (ถ้ามี)', 'note');
+  note.required = false;
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.textContent = 'บันทึกผล KPI';
+  form.appendChild(submit);
+  form.onsubmit = async event => {
+    event.preventDefault();
+    submit.disabled = true;
+    try {
+      const result = await call('saveFact', {
+        kpiId: kpi.value, scope: scope.value, period: period.value,
+        value: value.value, asOf: asOf.value, sourceId: source.value, note: note.value
+      });
+      const currentScope = $('scopeSelect').value;
+      state.data.kpi = await call('summary', { scope: currentScope });
+      renderDashboard();
+      closeModal();
+      notify(result.message, 'good');
+    } catch (err) {
+      submit.disabled = false;
+      notify('บันทึกผล KPI ไม่สำเร็จ: ' + err.message, 'bad');
+    }
+  };
+  body.appendChild(form);
+}
+
+$('scopeSelect').onchange = async () => {
+  const scope = $('scopeSelect').value;
+  if (scope !== 'R' && !state.token) {
+    alert('ต้องเข้าสู่ระบบผู้ดูแลก่อนดูข้อมูลรายศูนย์');
+    $('scopeSelect').value = 'R';
+    return;
+  }
+  $('scopeSelect').disabled = true;
+  try {
+    state.data.kpi = await call('summary', { scope });
+    renderDashboard();
+  } catch (err) {
+    $('scopeSelect').value = 'R';
+    notify('โหลดข้อมูลศูนย์ไม่สำเร็จ: ' + err.message, 'bad');
+  } finally {
+    $('scopeSelect').disabled = false;
+  }
+};
+
+$('modal').addEventListener('click', event => {
+  if (event.target === $('modal')) closeModal();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('modal').classList.contains('hidden')) closeModal();
+});
+
+loadData();
+</script>
+</body>
+</html>
